@@ -1,0 +1,622 @@
+openapi: 3.0.3
+
+info:
+  title: Money Transfer
+  description: Service for transferring money between accounts.
+  version: 1.0.11
+  
+servers:
+  - url: url
+  
+tags:
+  - name: user
+    description: Operations about user
+  - name: transaction
+    description: Everything about transactions
+
+paths:
+  /user:
+    post:
+      tags:
+        - user
+      summary: Create user
+      description: Create a new user with an unique id
+      operationId: createUser
+      requestBody:
+        description: Created user object
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUser'
+          application/xml:
+            schema:
+              $ref: '#/components/schemas/CreateUser'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid data
+        '401':
+          description: Username is already taken
+
+  /user/login:
+    get:
+      tags:
+        - user
+      summary: Logs user into the system
+      description: ''
+      operationId: loginUser
+      parameters:
+        - name: username
+          in: query
+          description: The user name for login
+          required: true
+          schema:
+            type: string
+        - name: password
+          in: query
+          description: The password for login in clear text
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: successful operation
+          headers:
+            X-Rate-Limit:
+              description: calls per hour allowed by the user
+              schema:
+                type: integer
+                format: int32
+            X-Expires-After:
+              description: date in UTC when token expires
+              schema:
+                type: string
+                format: date-time
+          content:
+            application/xml:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: string
+        '400':
+          description: Invalid username/password supplied
+          
+  /user/logout:
+    get:
+      tags:
+        - user
+      summary: Logs out current logged-in user session
+      description: This can only be done by the logged-in user.
+      operationId: logoutUser
+      parameters: []
+      responses:
+        '200':
+          description: Successful operation
+        '400':
+          description: User must be logged-in
+      security:
+        - moneytransfer_auth: []
+        
+  /user/self:
+    get:
+      tags:
+        - user
+      summary: Gets full information
+      description: Returns full information only about logged-in user.
+      operationId: getUserSelf
+      parameters: []
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'          
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: User must be logged in
+      security: 
+        - moneytransfer_auth: []
+    put:
+      tags:
+        - user
+      summary: Updates user
+      description: Updates information only for logged-in user.
+      operationId: updateUserSelf
+      requestBody:
+        description: Update your user
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserToUpdate'
+          application/xml:
+            schema:
+              $ref: '#/components/schemas/UserToUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserToUpdate'
+      responses:
+        '200':
+          description: Successful operation
+        '400':
+          description: Entered invalid data
+        '401':
+          description: User must be logged-in
+      security:
+        - moneytransfer_auth: []
+    delete:
+      tags:
+        - user
+      summary: Deletes user
+      description: This can only be done by only logged-in user, the user won`t be deleted, its userStatus will be changed to 1.
+      operationId: deleteUserSelf
+      responses:
+        '200':
+          description: Successful operation
+        '401':
+          description: User must be logged-in
+      security:
+        - moneytransfer_auth: []
+        
+  /user/{userId}:
+    get:
+      tags:
+        - user
+      summary: Gets user by userId
+      description: This can only be done by logged-in admin.
+      operationId: getUserByUserId
+      parameters:
+        - name: userId
+          in: path
+          description: 'The userId that needs to be fetched'
+          required: true
+          schema:
+            type: number
+            format: int
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetUser'          
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/GetUser'
+        '400':
+          description: Invalid userID 
+        '401':
+          description: User must be a logged-in admin 
+        '404':
+          description: User not found
+      security: 
+        - moneytransfer_auth: 
+          - admin
+          
+    delete:
+      tags:
+        - user
+      summary: Deletes user
+      description: This can only be done by logged-in admin.
+      operationId: deleteUser
+      parameters:
+        - name: userId
+          in: path
+          description: The userId that needs to be deleted
+          required: true
+          schema:
+            type: number
+            format: int
+      responses:
+        '200':
+          description: Successful operation
+        '400':
+          description: Invalid userId supplied
+        '401':
+          description: User must be a logged-in admin 
+        '404':
+          description: User not found
+      security: 
+        - moneytransfer_auth: 
+          - admin
+          
+  /user/replenish:
+    put:
+      tags:
+        - user
+      summary: Replenishes users wallet. 
+      description: Replenishes users wallet. This can only be done by logged-in user.
+      operationId: replenishUser
+      parameters:
+        - name: moneyAmount
+          in: query
+          description: The amount of money user wants to replenish his balance
+          required: true
+          schema:
+            type: number
+            format: double
+      responses:
+        '200':
+          description: Successful operation, check your wallet
+        '401':
+          description: User must be logged-in
+        '402':
+          description: User has not enough money to replenish
+      security:
+        - moneytransfer_auth: []
+  
+  /user/withdraw:
+    put:
+      tags:
+        - user
+      summary: Withdraws money from users wallet
+      description: Withdraws money from users wallet. This can only be done by logged-in user.
+      operationId: withdrawUser
+      parameters:
+        - name: moneyAmount
+          in: query
+          description: The amount of money user wants to withdraw
+          required: true
+          schema:
+            type: number
+            format: double
+      responses:
+        '200':
+          description: Successful operation, now check your balance
+        '401':
+          description: User must be logged-in
+        '402':
+          description: User has not enough money to withdraw
+      security:
+        - moneytransfer_auth: []
+          
+  /transaction/{username}:
+    post:
+      tags:
+        - transaction
+      summary: Transfers money
+      description: Transfer money to other user. This can only be done by logged-in user.
+      operationId: postTransaction
+      parameters:
+        - name: username
+          in: path
+          description: 'The username to whom money will be sent'
+          required: true
+          schema:
+            type: string
+        - name: value
+          in: query
+          description: 'The username to whom money will be sent'
+          required: true
+          schema:
+            type: number
+            format: double
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'          
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '400':
+          description: Invalid receiver's username 
+        '401':
+          description: User should be logged-in
+        '402':
+          description: User has not enough money to send
+        '404':
+          description: Receiver's username not found
+      security: 
+        - moneytransfer_auth: []
+        
+  /transaction/sent:
+    get:
+      tags:
+        - transaction
+      summary: Gets all transactions where user have been sent money
+      description: Gets all transactions where user have been sent money. This can only be done by logged-in user.
+      operationId: getTransactionSend
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items: 
+                  $ref: '#/components/schemas/Transaction'          
+            application/xml:
+              schema:
+                type: array
+                items: 
+                  $ref: '#/components/schemas/Transaction'
+        '401':
+          description: User should be logged-in
+        '404':
+          description: No transaction found
+      security: 
+        - moneytransfer_auth: []
+        
+  /transaction/recieved:
+    get:
+      tags:
+        - transaction
+      summary: Gets all transactions where user have been recieved money
+      description: Gets all transactions where user have been recieved money. This can only be done by logged-in user.
+      operationId: getTransactionRecieved
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items: 
+                  $ref: '#/components/schemas/Transaction'          
+            application/xml:
+              schema:
+                type: array
+                items: 
+                  $ref: '#/components/schemas/Transaction'
+        '401':
+          description: User should be logged-in
+        '404':
+          description: No transaction found
+      security: 
+        - moneytransfer_auth: []
+        
+  /transaction/sent/{username}:
+    get:
+      tags:
+        - transaction
+      summary: Gets all transactions where some user sent money
+      description: Gets all transactions where some user sent money. This can only be done by admin.
+      operationId: getTransactionSendAdmin
+      parameters:
+        - name: username
+          in: path
+          description: 'The username whose "send" transactions should be recieved'   
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items: 
+                  $ref: '#/components/schemas/Transaction'          
+            application/xml:
+              schema:
+                type: array
+                items: 
+                  $ref: '#/components/schemas/Transaction'
+        '401':
+          description: User must be logged-in admin
+        '404':
+          description: No transaction found
+      security: 
+        - moneytransfer_auth:
+          - admin
+    
+  /transaction/recieved/{username}:
+    get:
+      tags:
+        - transaction
+      summary: Gets all transactions where certain user recieved money
+      description: Gets all transactions where certain user recieved money. This can only be done by admin.
+      operationId: getTransactionRecieveAdmin
+      parameters:
+        - name: username
+          in: path
+          description: The username whose "recieve" transactions should be returned
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items: 
+                  $ref: '#/components/schemas/Transaction'          
+            application/xml:
+              schema:
+                type: array
+                items: 
+                  $ref: '#/components/schemas/Transaction'
+        '401':
+          description: User must be logged-in admin
+        '404':
+          description: No transaction found
+      security: 
+        - moneytransfer_auth:
+          - admin
+          
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 13423
+        username:
+          type: string
+          example: mariaivanova
+        firstName:
+          type: string
+          example: Maria
+        lastName:
+          type: string
+          example: Ivanova
+        email:
+          type: string
+          example: mariaivanova@email.com
+        password:
+          type: string
+          example: 'iammariaivanova'
+        phone:
+          type: string
+          example: '+380981234567'
+        birthDate: 
+          type: string
+          format: date
+          example: '1990-10-12'
+        wallet:
+          type: number
+          description: amount of money in a wallet
+          format: float
+          example: 123456.78
+        userStatus:
+          type: integer
+          format: int32
+          enum:
+            - 0
+            - 1
+          example: 0
+      xml:
+        name: user
+    GetUser:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 13423
+        username:
+          type: string
+          example: mariaivanova
+        firstName:
+          type: string
+          example: Maria
+        lastName:
+          type: string
+          example: Ivanova
+        email:
+          type: string
+          example: mariaivanova@email.com
+        phone:
+          type: string
+          example: '+380981234567'
+        birthDate: 
+          type: string
+          format: date
+          example: '1990-10-12'
+        userStatus:
+          type: integer
+          format: int32
+          enum:
+            - 0
+            - 1
+          example: 0
+      xml:
+        name: getuser
+    CreateUser:
+      type: object
+      properties:
+        username:
+          type: string
+          example: mariaivanova
+        firstName:
+          type: string
+          example: Maria
+        lastName:
+          type: string
+          example: Ivanova
+        email:
+          type: string
+          example: mariaivanova@email.com
+        password:
+          type: string
+          example: 'iammariaivanova'
+        phone:
+          type: string
+          example: '+380981234567'
+        birthDate: 
+          type: string
+          format: date
+          example: '1990-10-12'
+      xml:
+        name: createuser
+    UserToUpdate:
+      type: object
+      properties:
+        firstName:
+          type: string
+          example: Maria
+        lastName:
+          type: string
+          example: Ivanova
+        email:
+          type: string
+          example: mariaivanova@email.com
+        password:
+          type: string
+          example: 'iammariaivanova'
+        phone:
+          type: string
+          example: '+380981234567'
+      xml:
+        name: usertoupdate
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 89
+        sentByUser:
+          type: string
+          example: sentByUsername1
+        sentToUser:
+          type: string
+          example: sentToUsername2
+        value:
+          type: number
+          format: double
+          example: 232.67
+        datePerformed:
+          type: string
+          format: date
+          example: '2020-10-19'
+      xml:
+        name: transaction
+  securitySchemes:
+    moneytransfer_auth:
+      type: oauth2
+      flows:
+        implicit:
+          authorizationUrl: url
+          scopes:
+            admin: Grants access to admin operations
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
