@@ -9,6 +9,11 @@ packages = [{include = "proj_env"}]
 [tool.poetry.dependencies]
 python = "^3.7"
 Flask = "^2.2.2"
+waitress = "^2.1.2"
+sqlalchemy = "^1.4.42"
+psycopg2 = "^2.9.5"
+flask-sqlalchemy = "^3.0.2"
+alembic = "^1.8.1"
 
 
 [build-system]
