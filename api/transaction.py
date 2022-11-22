@@ -12,7 +12,6 @@ transaction = Blueprint('transaction', __name__, url_prefix='/transaction')
 @transaction.route('/<int:id>', methods=['GET'])
 def get_transaction_by_id(id):
     db = get_db()
-
    
     transaction_r = db.query(Transaction).filter(Transaction.id == id).first()
 

@@ -9,7 +9,6 @@ from api.errors import StatusResponse
 
 user = Blueprint('user', __name__, url_prefix='/user')
 
-
 @user.route('/', methods=['POST'])
 def add_user():
     db = get_db()
@@ -47,7 +46,6 @@ def add_user():
 @user.route('/<int:id>', methods=['GET'])
 def get_user(id):
     db = get_db()
-
    
     username_r = db.query(User).filter(User.id == id).first()
 
