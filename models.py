@@ -16,14 +16,13 @@ class User(BaseModel):
     __tablename__ = "user"
 
     id = Column(Integer, primary_key=True)
+    username = Column(String(30), nullable=False)
     firstName = Column(String(30), nullable=False)
     lastName = Column(String(30), nullable=False)
     email = Column(String(254), nullable=False)
-    password = Column(String(30), nullable=False)
-    phone = Column(String(30))
-    birthDate = Column(Date, nullable=False)
+    password = Column(String(100), nullable=False)
     wallet = Column(Float,nullable=False)
-    userStatus = Column(Integer,nullable=False)
+    
 
 class Transaction(BaseModel):
     __tablename__ = "transactions"
