@@ -3,11 +3,6 @@ from waitress import serve
 app = Flask(__name__)
 
 
-@app.route("/api/v1/hello-world-11")
-def home():
-    return "Hello world 11"
-
-
 def create_app(test_config=None):
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)

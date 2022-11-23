@@ -12,7 +12,7 @@ user = Blueprint('user', __name__, url_prefix='/user')
 @user.route('/', methods=['POST'])
 def add_user():
     db = get_db()
-
+    
     try:
         user = UserCreatingSchema().load(request.get_json())
     except ValidationError as err:
@@ -21,12 +21,13 @@ def add_user():
     username_r = db.query(User).filter(User.username == user['username']).first()
 
     if username_r:
-        return StatusResponse(code=400, response='The username is used by other user')
+        return StatusResponse(code=400, response='The username is already taken')
 
     existsEmail = db.query(User).filter(User.email==user['email']).first()
 
     if existsEmail:
-        return StatusResponse(code=400, response='The email is used by other user')
+
+        return StatusResponse(code=400, response='The email is already registered')
 
     hashed_password = bcrypt.hashpw(user['password'].encode('utf-8'),salt = bcrypt.gensalt()).decode('utf-8')
 
@@ -37,9 +38,61 @@ def add_user():
 
     db.add(new_user)   
     
-
     db.commit()
+
     a = db.query(User).filter(User.username == user['username']).first()
+
+    return get_user(a.id)
+
+
+@user.route('/<int:id>', methods=['PUT'])
+def update_user(id):
+    db = get_db()
+    
+    try:
+        user = UserCreatingSchema().load(request.get_json())
+    except ValidationError as err:
+        return StatusResponse(err.messages, 400)
+
+    
+    username_r = db.query(User).filter(User.id == id).first()
+
+    if username_r is None:
+         return StatusResponse(code=404,response="No user with such id!")
+    
+    username_r = db.query(User).filter(User.username == user['username']).first()
+
+    if username_r is not None and username_r.id != user['username']:
+        return StatusResponse(code=400, response='The username is used by other user')
+
+    existsEmail = db.query(User).filter(User.email==user['email']).first()
+
+    if existsEmail is not None:
+        if  existsEmail.id != user['username']:
+            return StatusResponse(code=400, response='The email is used by other user')
+
+    hashed_password = bcrypt.hashpw(user['password'].encode('utf-8'),salt = bcrypt.gensalt()).decode('utf-8')
+
+    print(hashed_password)
+
+    new_user = User(firstName=user['firstName'], lastName=user['lastName'], username=user['username'],
+                     email=user['email'], password=hashed_password,wallet = 0)
+
+
+    username_r = db.query(User).filter(User.id == id).first()
+    if username_r is None:
+        print('aaaa')
+        return '1',200
+    username_r.email = new_user.email
+    username_r.firstName = new_user.firstName
+    username_r.lastName = new_user.lastName
+    username_r.username = new_user.username
+    username_r.password = new_user.password
+    
+    db.commit()
+
+    a = db.query(User).filter(User.username == user['username']).first()
+
     return get_user(a.id)
 
 
@@ -59,7 +112,6 @@ def get_user(id):
 @user.route('/<int:id>', methods=['DELETE'])
 def delete_user(id):
     db = get_db()
-
    
     username_r = db.query(User).filter(User.id == id).first()
 

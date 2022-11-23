@@ -1,4 +1,5 @@
 from marshmallow import Schema, fields, base
+from datetime import datetime
 
 class UserCreatingSchema(Schema):
     username = fields.String(required=True)
@@ -22,3 +23,8 @@ class TransactionSchema(Schema):
     sentByUser = fields.Integer()
     sentToUser = fields.Integer()
     
+class TransactionAddSchema(Schema):
+    value = fields.Decimal()
+    datePerformed = fields.DateTime()
+    sentByUser = fields.Integer()
+    sentToUser = fields.Integer()
