@@ -8,6 +8,10 @@ class UserCreatingSchema(Schema):
     firstName = fields.String(required=True) 
     lastName = fields.String(required=True)
 
+class UserLogin(Schema):
+    username = fields.String(required=True)
+    password = fields.String(required=True)
+
 class UserGetSchema(Schema):
     userId = fields.Integer()
     username = fields.String()
@@ -22,7 +26,11 @@ class TransactionSchema(Schema):
     datePerformed = fields.DateTime()
     sentByUser = fields.Integer()
     sentToUser = fields.Integer()
-    
+
+class MoneySchema(Schema):
+    amount = fields.Decimal()
+
+
 class TransactionAddSchema(Schema):
     value = fields.Decimal()
     datePerformed = fields.DateTime()

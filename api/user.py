@@ -6,8 +6,44 @@ from db import *
 from schemas import *
 from models import *
 from api.errors import StatusResponse
+import datetime 
+
+from flask_jwt_extended import create_access_token
+from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import jwt_required,get_jwt
 
 user = Blueprint('user', __name__, url_prefix='/user')
+
+
+
+@user.route("/login", methods=["POST"])
+def login():
+    db = get_db()
+    try:
+        user = UserLogin().load(request.get_json())
+    except ValidationError as err:
+        return StatusResponse("Bad username or password", 401)
+
+    us = db.query(User).filter(User.username == user['username']).first()
+
+    if us is None:
+        return StatusResponse("Bad username or password",401)
+   
+    print(user['password'].encode('utf-8'),us.password.encode('utf-8'))
+    if bcrypt.checkpw(user['password'].encode('utf-8'), us.password.encode('utf-8')): 
+        return StatusResponse("Bad username or password",401)
+
+    access_token = create_access_token(identity=user['username'])
+    return jsonify(access_token=access_token)
+
+@user.route("/logout", methods=["DELETE"])
+@jwt_required()
+def logout_user():
+    db = get_db()
+    jti = get_jwt()["jti"]
+    db.add(JWTToken(id=jti))
+    db.commit()
+    return jsonify(msg="JWT revoked")
 
 @user.route('/', methods=['POST'])
 def add_user():
@@ -110,6 +146,7 @@ def get_user(id):
     return StatusResponse(response=user,code = 200)
 
 @user.route('/<int:id>', methods=['DELETE'])
+@jwt_required()
 def delete_user(id):
     db = get_db()
    
@@ -125,3 +162,38 @@ def delete_user(id):
     username_r.wallet = 0
 
     return StatusResponse(response="User deleted!",code = 200)
+
+@user.route('/replenish', methods=['PUT'])
+@jwt_required()
+def add_money():
+    print('aaaa')
+    current_user = get_jwt_identity()
+    db = get_db()
+    try:
+        money = MoneySchema().load(request.get_json())
+    except ValidationError as err:
+        return StatusResponse(err.messages, 400)
+    
+    user = db.query(User).filter(User.username == current_user).first()
+    if user is None:
+        return StatusResponse("No user with such username",400)
+    user.wallet += float(money['amount'])
+    db.commit()
+    return StatusResponse(response="Money added!",code = 200)
+
+@user.route('/withdraw', methods=['PUT'])
+@jwt_required()
+def remove_money():
+    current_user = get_jwt_identity()
+    db = get_db()
+    try:
+        money = MoneySchema().load(request.get_json())
+    except ValidationError as err:
+        return StatusResponse(err.messages, 400)
+    
+    user = db.query(User).filter(User.username == current_user).first()
+    if user is None:
+        return StatusResponse("No user with such username",400)
+    user.wallet -= float(money['amount'])
+    db.commit()
+    return StatusResponse(response="Money removed!",code = 200)

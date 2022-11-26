@@ -32,3 +32,9 @@ class Transaction(BaseModel):
     datePerformed = Column(DateTime,nullable=False)
     sentByUser = Column(Integer, ForeignKey('user.id'))
     sentToUser = Column(Integer, ForeignKey('user.id'))
+
+class JWTToken(BaseModel):
+    __tablename__ = "tokens"
+
+    id = Column(String(64), nullable=False, primary_key = True)
+    

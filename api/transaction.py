@@ -10,6 +10,21 @@ from datetime import datetime
 
 transaction = Blueprint('transaction', __name__, url_prefix='/transaction')
 
+"""
+@transaction.route('/<username>, methods=['POST'])
+def get_transaction_by_id(id):
+    db = get_db()
+   
+    transaction_r = db.query(Transaction).filter(Transaction.id == id).first()
+
+    if transaction_r is None:
+         return StatusResponse(code=404,response="No transaction with such id!")
+    
+    trans = TransactionSchema().dump(transaction_r)
+
+    return StatusResponse(response=trans,code = 200)
+"""
+
 @transaction.route('/<int:id>', methods=['GET'])
 def get_transaction_by_id(id):
     db = get_db()
