@@ -23,6 +23,11 @@ class User(BaseModel):
     password = Column(String(100), nullable=False)
     wallet = Column(Float,nullable=False)
     
+class Admin(BaseModel):
+    __tablename__ = "admins"
+    
+    username = Column(String(30), nullable=False,primary_key = True)
+
 
 class Transaction(BaseModel):
     __tablename__ = "transactions"

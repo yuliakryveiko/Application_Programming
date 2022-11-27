@@ -82,6 +82,7 @@ def add_user():
 
 
 @user.route('/<int:id>', methods=['PUT'])
+@jwt_required()
 def update_user(id):
     db = get_db()
     
@@ -90,21 +91,24 @@ def update_user(id):
     except ValidationError as err:
         return StatusResponse(err.messages, 400)
 
-    
+    current_user = get_jwt_identity()
     username_r = db.query(User).filter(User.id == id).first()
-
     if username_r is None:
          return StatusResponse(code=404,response="No user with such id!")
+    if not (current_user == username_r.username or db.query(Admin).filter(Admin.username == current_user).first() is not None):
+        return StatusResponse(code=401,response="No rights or access!")
+
+    
     
     username_r = db.query(User).filter(User.username == user['username']).first()
 
-    if username_r is not None and username_r.id != user['username']:
+    if username_r is not None and username_r.username != user['username']:
         return StatusResponse(code=400, response='The username is used by other user')
 
     existsEmail = db.query(User).filter(User.email==user['email']).first()
 
     if existsEmail is not None:
-        if  existsEmail.id != user['username']:
+        if  existsEmail.email != user['email']:
             return StatusResponse(code=400, response='The email is used by other user')
 
     hashed_password = bcrypt.hashpw(user['password'].encode('utf-8'),salt = bcrypt.gensalt()).decode('utf-8')
@@ -116,9 +120,57 @@ def update_user(id):
 
 
     username_r = db.query(User).filter(User.id == id).first()
+
+    username_r.email = new_user.email
+    username_r.firstName = new_user.firstName
+    username_r.lastName = new_user.lastName
+    username_r.username = new_user.username
+    username_r.password = new_user.password
+    
+    db.commit()
+
+    a = db.query(User).filter(User.username == user['username']).first()
+
+    return get_user(a.id)
+
+@user.route('/self', methods=['PUT'])
+@jwt_required()
+def update_user_self():
+    db = get_db()
+    
+    try:
+        user = UserCreatingSchema().load(request.get_json())
+    except ValidationError as err:
+        return StatusResponse(err.messages, 400)
+
+    current_user = get_jwt_identity()
+    username_r = db.query(User).filter(User.username == current_user).first()
     if username_r is None:
-        print('aaaa')
-        return '1',200
+         return StatusResponse(code=404,response="No user with such id!")
+    if not (current_user == username_r.username or db.query(Admin).filter(Admin.username == current_user).first() is not None):
+        return StatusResponse(code=401,response="No rights or access!")
+
+    username_r = db.query(User).filter(User.username == user['username']).first()
+
+    if username_r is not None and username_r.username != user['username']:
+        return StatusResponse(code=400, response='The username is used by other user')
+
+    existsEmail = db.query(User).filter(User.email==user['email']).first()
+
+    if existsEmail is not None:
+        if  existsEmail.email != user['email']:
+            return StatusResponse(code=400, response='The email is used by other user')
+
+    hashed_password = bcrypt.hashpw(user['password'].encode('utf-8'),salt = bcrypt.gensalt()).decode('utf-8')
+
+    print(hashed_password)
+
+    new_user = User(firstName=user['firstName'], lastName=user['lastName'], username=user['username'],
+                     email=user['email'], password=hashed_password,wallet = 0)
+
+
+    username_r = db.query(User).filter(User.username == user['username']).first()
+
     username_r.email = new_user.email
     username_r.firstName = new_user.firstName
     username_r.lastName = new_user.lastName
@@ -145,15 +197,58 @@ def get_user(id):
 
     return StatusResponse(response=user,code = 200)
 
+@user.route('/self', methods=['GET'])
+@jwt_required()
+def get_user_self():
+    db = get_db()
+
+    current_user = get_jwt_identity()    
+    username_r = db.query(User).filter(User.username == current_user).first()
+
+    if username_r is None:
+         return StatusResponse(code=404,response="No user with such id!")
+    
+    user = UserGetSchema().dump(username_r)
+
+    return StatusResponse(response=user,code = 200)
+
 @user.route('/<int:id>', methods=['DELETE'])
 @jwt_required()
 def delete_user(id):
     db = get_db()
-   
+    current_user = get_jwt_identity()     
+    
     username_r = db.query(User).filter(User.id == id).first()
 
     if username_r is None:
-         return StatusResponse(code=404,response="No user with such id!")
+        return StatusResponse(code=404,response="No user with such id!")
+   
+    if not (current_user == username_r.username or db.query(Admin).filter(Admin.username == current_user).first() is not None):
+        return StatusResponse(code=401,response="No rights or access!")
+
+    
+    username_r.username = 'DELETED'
+    username_r.firstName = 'DELETED'
+    username_r.email = 'DELETED'
+    username_r.lastName = 'DELETED'
+    username_r.wallet = 0
+
+    return StatusResponse(response="User deleted!",code = 200)
+
+@user.route('/self', methods=['DELETE'])
+@jwt_required()
+def delete_user_self():
+    db = get_db()
+    current_user = get_jwt_identity()     
+    
+    username_r = db.query(User).filter(User.username == current_user).first()
+
+    if username_r is None:
+        return StatusResponse(code=404,response="No user with such id!")
+   
+    if not (current_user == username_r.username or db.query(Admin).filter(Admin.username == current_user).first() is not None):
+        return StatusResponse(code=401,response="No rights or access!")
+
     
     username_r.username = 'DELETED'
     username_r.firstName = 'DELETED'
@@ -166,7 +261,6 @@ def delete_user(id):
 @user.route('/replenish', methods=['PUT'])
 @jwt_required()
 def add_money():
-    print('aaaa')
     current_user = get_jwt_identity()
     db = get_db()
     try:
