@@ -86,6 +86,7 @@ def get_sent_by_user(id):
     return StatusResponse(response=li,code = 200)
 
 @transaction.route('/sent/self', methods=['GET'])
+@jwt_required()
 def get_sent_by_user_self():
     db = get_db()
     current_user = get_jwt_identity()
@@ -114,6 +115,7 @@ def get_received_by_user(id):
 
     
 @transaction.route('/received/self', methods=['GET'])
+@jwt_required()
 def get_received_by_user_self():
     db = get_db()
 
