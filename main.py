@@ -8,9 +8,8 @@ from flask_jwt_extended import JWTManager
 from models import JWTToken
 # create and configure the app
 app = Flask(__name__, instance_relative_config=True)
-app.config["JWT_SECRET_KEY"] = "super-secret"  # Change this!
-from db import db_init,get_db
-db_init()
+app.config["JWT_SECRET_KEY"] = "qwerty"  # Change this!
+from db import get_db
 jwt = JWTManager(app)   
 
 
@@ -21,14 +20,14 @@ app.register_blueprint(user.user)
 
 
 @jwt.token_in_blocklist_loader
-def check_if_token_revoked(jwt_header, jwt_payload: dict) -> bool:
+def check_if_token_revoked(jwt_header, jwt_payload: dict) -> bool: #pragma no cover
     db = get_db()
     jti = jwt_payload["jti"]
     token = db.query(JWTToken).filter(JWTToken.id==jti).first()
 
     return token is not None
 
-if __name__ == "__main__":
+if __name__ == "__main__": #pragma no cover
     print("Started")
     
     app.run(debug=True,port = 8080)

@@ -1,171 +1,496 @@
-import unittest
-from unittest import TestCase
-
-from api.errors import *
-from models import User
-from db import get_db
-from api.user import get_user,add_user
-from main import app
+from flask_testing import TestCase
+from flask import Flask
+from db import get_db_test
+from models import User,JWTToken
 import requests
 import json
-
+from flask_jwt_extended import JWTManager
 def delete_user_if_present(id):
-    db = get_db()
+    db = get_db_test()
     if db.query(User).filter(User.username == id).first() is not None:
         db.query(User).filter(User.username == id).delete()
         db.commit()
-def get_auth(username = "user5", password = "qwertyqwerty"):
-    b = {
-        "username": username,
-        "password": password,
-    }
-    url = "http://127.0.0.1:8080/user/login"
-    x = requests.post(url=url,json=b)
-    if x.status_code == 200:
-        return {"Authorization":"Bearer "+json.loads(x.text)["access_token"]}
-    else:
-        return -1
-class TestUser(TestCase):
+    if db.query(User).filter(User.username == "DELETED").first() is not None:
+        db.query(User).filter(User.username == "DELETED").delete()
+        db.commit()
 
+
+
+class MyTest(TestCase):
+
+    TESTING = True
+
+    def create_app(self):
+        from api import transaction,user
+        app = Flask(__name__)
+        app.config["JWT_SECRET_KEY"] = "qwerty"  # Change this!
+        jwt = JWTManager(app)   
+        @jwt.token_in_blocklist_loader
+        def check_if_token_revoked(jwt_header, jwt_payload: dict) -> bool:
+            db = get_db_test()
+            jti = jwt_payload["jti"]
+            token = db.query(JWTToken).filter(JWTToken.id==jti).first()
+
+            return token is not None
+
+        app.register_blueprint(transaction.transaction)
+        app.register_blueprint(user.user)
+        app.config['TESTING'] = True
+        return app
+
+    def get_auth(self,username = "user1", password = "qwerty"):
+        b = {
+            "username": username,
+            "password": password,
+        }
+        x = self.client.post('user/login',json=b)
+        if x.status_code == 200:
+            return {"Authorization":"Bearer "+json.loads(x.text)["access_token"]}
+        else:
+            #print(x.text)
+            return -1
     
+    def test_login(self):
+        a = self.get_auth('user1','qwerty')
+        self.assertNotEqual(a,-1)
+
+    def test_login_bad_password(self):
+        a = self.get_auth('user1','qwertyewr')
+        self.assertEqual(a,-1)
+
+    def test_login_bad_body(self):
+        a = self.get_auth('user1',1)
+        self.assertEqual(a,-1)
+    
+    def test_login_bad_user(self):
+        a = self.get_auth('user4','1')
+        self.assertEqual(a,-1)
+
+    def test_login_revoked(self):
+        a = self.get_auth('user1','qwerty')
+        x = self.client.delete('user/logout',headers = a)
+        x = self.client.put('user/replenish',headers = a)
+        self.assert401(x)
+
+    def test_create_user(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "test@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,200)
+
+    def test_create_user_bad_body(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": 1,
+        "email": "test@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,400)
+
+    def test_create_user_user_exists(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user1",
+        "email": "test@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,400)
+
+    def test_create_user_email_exists(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "email1@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        delete_user_if_present("user3")
+        self.assertEqual(response.status_code,400)
+
     def test_get_user(self):
-        with app.app_context():
-            db = get_db()
-            a = get_user('4')
-            #print(a)
-            self.assertEqual(a.status_code,200)
-    def test_get_user_bad_id(self):
-        with app.app_context():
-            db = get_db()
-            a = get_user('23')
-            #print(a)
-            self.assertNotEqual(a.status_code,200)
-    def test_add_user(self):
-        with app.app_context():
-            db = get_db()
-            delete_user_if_present("user9")
-            
-            url = "http://127.0.0.1:8080/user"
-            tag_obj = {"email": "qwerty@qwerty.com",
-                        "firstName": "Kyle",
-                        "lastName": "Jackson",
-                        "username": "user9",
-                        "password": "qwerty"}
-            x = requests.post(url=url,json=tag_obj,headers=get_auth())
-            
-            print(x.text)
-            delete_user_if_present("user9")
-            self.assertEqual(x.status_code,200)
-    def test_add_user_bad_email(self):
-        with app.app_context():
-            db = get_db()
-            delete_user_if_present("user8")
-          
-            url = "http://127.0.0.1:8080/user"
-            tag_obj = {"email": "qwerty@gmail.com",
-                        "firstName": "Kyle",
-                        "lastName": "Jackson",
-                        "username": "user8",
-                        "password": "qwerty"}
-            x = requests.post(url=url,json=tag_obj,headers=get_auth())
-            #print(x.text)
-            delete_user_if_present("user8")
-            self.assertEqual(x.status_code,400)
+        response = self.client.get('user/3')
+        self.assertEqual(response.status_code,404)
 
-    def test_add_user_bad_usename(self):
-        with app.app_context():
-            db = get_db()
-            delete_user_if_present("user8")
-          
-            url = "http://127.0.0.1:8080/user"
-            tag_obj = {"email": "qwerty@gmail.com",
-                        "firstName": "Kyle",
-                        "lastName": "Jackson",
-                        "username": "user4",
-                        "password": "qwerty"}
-            x = requests.post(url=url,json=tag_obj,headers=get_auth())
-            #print(x.text)
-            delete_user_if_present("user8")
-            self.assertEqual(x.status_code,400)
+    def test_get_user_self(self):
+        response = self.client.get('user/self',headers = self.get_auth('user1','qwerty'))
+        self.assertEqual(response.status_code,200)
 
-    def test_add_user_bad_schema(self):
-        with app.app_context():
-            db = get_db()
-            delete_user_if_present("user8")
-          
-            url = "http://127.0.0.1:8080/user"
-            tag_obj = {"email": "qwerty@gmail.com",
-                        "firstName": "Kyle",
-                        "lastName": "Jackson",
-                        "username": "user4",
-                        }
-            x = requests.post(url=url,json=tag_obj,headers=get_auth())
-            #print(x.text)
-            delete_user_if_present("user8")
-            self.assertEqual(x.status_code,400)
-    def test_update(self):
-        with app.app_context():
-            db = get_db()
-           
-          
-            url = "http://127.0.0.1:8080/user/4"
-            tag_obj = {"email": "qwerty@gmail.com",
-                        "firstName": "Kyle",
-                        "lastName": "Jackson",
-                        "username": "user4",
-                        "password": "qwertyqwerty"
-                        }
-            x = requests.put(url=url,json=tag_obj,headers=get_auth())
-            #print(x.text)
-            
-            self.assertEqual(x.status_code,200)
-    def test_update_bad_schema(self):
-        with app.app_context():
-            db = get_db()
-           
-          
-            url = "http://127.0.0.1:8080/user/4"
-            tag_obj = {"email": "qwerty@gmail.com",
-                        "firstName": "Kyle",
-                        "lastName": "Jackson",
-                        "username": "user4",
-                        }
-            x = requests.put(url=url,json=tag_obj,headers=get_auth())
-            #print(x.text)
-            
-            self.assertEqual(x.status_code,400)
+    def test_update_user(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        #print(response.text)
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.put('user/user3',json=tag_obj,headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,200)
 
-    def test_update_bad_name(self):
-        with app.app_context():
-            db = get_db()
-           
-          
-            url = "http://127.0.0.1:8080/user/4"
-            tag_obj = {"email": "qwerty@gmail.com",
-                        "firstName": "Kyle",
-                        "lastName": "Jackson",
-                        "username": "user5",
-                        }
-            x = requests.put(url=url,json=tag_obj,headers=get_auth())
-            #print(x.text)
-            
-            self.assertEqual(x.status_code,400)
-    def test_update_bad_email(self):
-        with app.app_context():
-            db = get_db()
-           
-          
-            url = "http://127.0.0.1:8080/user/4"
-            tag_obj = {"email": "qwertyqwerty@gmail.com",
-                        "firstName": "Kyle",
-                        "lastName": "Jackson",
-                        "username": "user4",
-                        }
-            x = requests.put(url=url,json=tag_obj,headers=get_auth())
-            #print(x.text)
-            
-            self.assertEqual(x.status_code,400)
+    def test_update_user_bad_id(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.put('user/5',json=tag_obj,headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,404)
+    
+    def test_update_user_bad_user(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.put('user/user3',json=tag_obj,headers = self.get_auth('user2','qwerty'))
+        delete_user_if_present("user3") 
+        #print(response.text)
+        self.assertEqual(response.status_code,401)
+
+    def test_update_user_bad_body(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        tag_obj = {
+        "username": 1,
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.put('user/user3',json=tag_obj,headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,400)
+
+    def test_update_user_username_exists(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        tag_obj = {
+        "username": "user2",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.put('user/user3',json=tag_obj,headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,400)
+
+    def test_update_user_email_exists(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        tag_obj = {
+        "username": "user3",
+        "email": "email1@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.put('user/user3',json=tag_obj,headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,400)
+
+    def test_update_user_self(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.put('user/self',json=tag_obj,headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,200)
+
+    def test_update_user_bad_body_self(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        tag_obj = {
+        "username": 1,
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.put('user/self',json=tag_obj,headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,400)
+
+    def test_update_user_username_exists_self(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        tag_obj = {
+        "username": "user2",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.put('user/self',json=tag_obj,headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,400)
+
+    def test_update_user_email_exists_self(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        tag_obj = {
+        "username": "user3",
+        "email": "email1@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.put('user/self',json=tag_obj,headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,400)
+    
+    def test_delete_user(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        response = self.client.delete('user/user3',headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,200)
+
+    def test_delete_user_bad_user(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        response = self.client.delete('user/user3',headers = self.get_auth('user2','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,401)
+
+    def test_delete_user_bad_username(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        response = self.client.delete('user/user324',headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,404)
 
 
-if __name__ == '__main__':
-    unittest.main()
+    def test_delete_user_self(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        response = self.client.delete('user/self',headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,200)
+
+    def test_add_money(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        obj = {
+            "amount": 50
+        }
+        response = self.client.put('user/replenish',json = obj,headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,200)
+    
+    def test_add_money_bad_body(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        obj = {
+            "amount": "ggg"
+        }
+        response = self.client.put('user/replenish',json = obj,headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,400)
+    
+    def test_remove_money(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        obj = {
+            "amount": 50
+        }
+        response = self.client.put('user/replenish',json = obj,headers = self.get_auth('user3','qwerty'))
+        response = self.client.put('user/withdraw',json = obj,headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,200)
+
+    def test_remove_money_bad_body(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        obj = {
+            "amount": 50
+        }
+        response = self.client.put('user/replenish',json = obj,headers = self.get_auth('user3','qwerty'))
+        obj = {
+            "amount": "ggg"
+        }
+        response = self.client.put('user/withdraw',json = obj,headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,400)
+
+    def test_remove_money_not_enough(self):
+        delete_user_if_present("user3") 
+        tag_obj = {
+        "username": "user3",
+        "email": "haha@gmail.com",
+        "password": "qwerty",
+        "firstName": "Carl",
+        "lastName": "Jackson"
+        }
+        response = self.client.post('user/',json=tag_obj)
+        obj = {
+            "amount": 50
+        }
+        response = self.client.put('user/replenish',json = obj,headers = self.get_auth('user3','qwerty'))
+        obj = {
+            "amount": 60
+        }
+        response = self.client.put('user/withdraw',json = obj,headers = self.get_auth('user3','qwerty'))
+        delete_user_if_present("user3") 
+        self.assertEqual(response.status_code,400)

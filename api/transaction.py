@@ -67,16 +67,22 @@ def add_transaction():
     db.add(trans)
     db.commit()
     print(time_now.strftime("%Y-%m-%d %H:%M:%S"))
-    t_r = db.query(Transaction).filter(Transaction.datePerformed == time_now.strftime("%Y-%m-%d %H:%M:%S")).first()
+    
+    t_r = db.query(Transaction).filter(Transaction.sentByUser == trans.sentByUser,Transaction.sentToUser == trans.sentToUser
+    ).order_by(desc(Transaction.datePerformed)).first()
     return get_transaction_by_id(t_r.id)
 
 
 
-@transaction.route('/sent/<int:id>', methods=['GET'])
-def get_sent_by_user(id):
+@transaction.route('/sent/<username>', methods=['GET'])
+def get_sent_by_user(username):
     db = get_db()
 
-    transaction_r = db.query(Transaction).filter(Transaction.sentByUser == id).all()
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        return StatusResponse(response="No user with such username",code = 404)
+
+    transaction_r = db.query(Transaction).filter(Transaction.sentByUser == user.id).all()
 
     li = []
 
@@ -100,15 +106,17 @@ def get_sent_by_user_self():
 
     return StatusResponse(response=li,code = 200)
 
-@transaction.route('/received/<int:id>', methods=['GET'])
-def get_received_by_user(id):
+@transaction.route('/received/<username>', methods=['GET'])
+def get_received_by_user(username):
     db = get_db()
-
-    transaction_r = db.query(Transaction).filter(Transaction.sentToUser == id).all()
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        return StatusResponse(response="No user with such username",code = 404)
+    transaction_r = db.query(Transaction).filter(Transaction.sentToUser == user.id).all()
 
     li = []
 
-    for trans in transaction_r:
+    for trans in transaction_r:#pragma no cover
         li.append(TransactionSchema().dump(trans))
 
     return StatusResponse(response=li,code = 200)
@@ -125,6 +133,6 @@ def get_received_by_user_self():
     li = []
 
     for trans in transaction_r:
-        li.append(TransactionSchema().dump(trans))
+        li.append(TransactionSchema().dump(trans))#pragma no cover
 
     return StatusResponse(response=li,code = 200)
